@@ -215,7 +215,7 @@ export class OpenAiApi {
         // myHeaders.append("referer", this.getReferrer());
         myHeaders.append("sec-fetch-site", "same-origin");
 
-        if (this.requirementsData.arkose.required) {
+        if (this.requirementsData?.arkose?.required) {
             try {
                 myHeaders.append("Openai-Sentinel-Arkose-Token", (await this.arkoseInstance.getArkoseToken()) as string);
             } catch (_) {
@@ -227,6 +227,10 @@ export class OpenAiApi {
                     })
                 );
             }
+        } else if (this.requirementsData?.turnstile?.required) {
+            Logger.log('Turnstile verification required in conversation');
+        } else if (this.requirementsData?.proofofwork?.required) {
+            Logger.log('Proof of work verification required in conversation');
         }
 
         Logger.log('Arkose-Token token settle',);
