@@ -1,6 +1,7 @@
 import {createBrowserRouter, useLocation} from "react-router-dom";
 import Index from "~options/pages";
 import ShortcutMenu from "~options/pages/ShortcutMenu";
+import ApiKeySettings from "~options/pages/ApiKeySettings";
 import Layout from "~options/layout";
 import OptionsProvider from "~provider/Options";
 import {Fragment, useContext, useEffect} from "react";
@@ -9,6 +10,7 @@ import {GoogleAnalyticsContext} from "~provider/GoogleAnalyticsProvider";
 export const PATH_SETTING_SIDEBAR = "path_shortcut";
 export const PATH_SETTING_CONTACT_US = "path_contact_us";
 export const PATH_SETTING_SHORTCUT = "";
+export const PATH_SETTING_APIKEY = "api_key";
 
 const Wrapper = ({children}) => {
     const location = useLocation();
@@ -41,6 +43,10 @@ export const router = createBrowserRouter([
             {
                 path: PATH_SETTING_SHORTCUT,
                 element: <ShortcutMenu/>,
+            },
+            {
+                path: PATH_SETTING_APIKEY,
+                element: <ApiKeySettings/>,
             },
         ],
     },

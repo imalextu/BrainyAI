@@ -9,15 +9,30 @@ import {BotSupportedMimeType} from "~libs/chatbot/BotBase";
 import {OpenAiFileRef} from "~libs/chatbot/openai/fileInstance";
 import {createUuid} from "~utils/index";
 import {SimpleBotMessage} from "~libs/chatbot/BotSessionBase";
+import {Storage} from "@plasmohq/storage";
 
 class ChatGPT4OAuthSingleton {
     private static instance: ChatGPT4OAuthSingleton;
     auth: OpenAIAuth;
-    private apiKey: string = process.env.OPENAI_API_KEY || ""; // 从环境变量中读取API Key
-    private useApiKey: boolean = !!process.env.OPENAI_API_KEY; // 根据环境变量是否存在决定是否使用API Key
+    private storage = new Storage();
+    private apiKey: string = "";
+    private useApiKey: boolean = false;
 
-    protected constructor() {
-        // ignore
+    constructor() {
+        this.initializeSettings();
+    }
+
+    private async initializeSettings() {
+        this.apiKey = await this.storage.get("apiKey") || "";
+        this.useApiKey = await this.storage.get("useApiKey") || false;
+
+        console.log("this.apiKey11133", this.apiKey);
+        console.log("this.useApiKey11133", this.useApiKey);
+        
+        if (!this.useApiKey || !this.apiKey) {
+            this.apiKey = process.env.OPENAI_API_KEY || "";
+            this.useApiKey = !!process.env.OPENAI_API_KEY;
+        }
     }
 
     static getInstance(): ChatGPT4OAuthSingleton {
@@ -170,25 +185,53 @@ export default class ChatGPT4O extends OpenaiBot {
         
         Logger.log("apiKey111", apiKey);
 
+        if (!apiKey) {
+            return cb(rid, new ConversationResponse({
+                conversation_id: this.botSession.session.botConversationId,
+                parent_message_id: this.botSession.session.getParentMessageId(),
+                message_type: ResponseMessageType.ERROR,
+                error: new ChatError(ErrorCode.UNAUTHORIZED, "API密钥未提供")
+            }));
+        }
+
         try {
             // 构建包含历史消息的数组
             const messages = this.buildMessagesWithHistory(prompt);
-
             Logger.log("messages111", messages);
             
-            // 调用OpenAI官方API
-            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+            // 通知用户开始生成回复
+            const messageId = createUuid();
+            cb(rid, new ConversationResponse({
+                message_type: ResponseMessageType.GENERATING,
+                conversation_id: this.botSession.session.botConversationId,
+                message_id: messageId,
+                message_text: "正在生成回复，请稍候..."
+            }));
+
+            // 构建请求头和请求体
+            const myHeaders = new Headers();
+            myHeaders.append("Content-Type", "application/json");
+            myHeaders.append("Accept", "application/json");
+            myHeaders.append("Authorization", `Bearer ${apiKey}`);
+
+            const requestBody = {
+                prompt: prompt,
+                size: "1:1"
+            };
+
+            if (messages && messages.length > 0) {
+                requestBody["messageHistory"] = messages;
+            }
+
+            const requestOptions = {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-4o",
-                    messages: messages,
-                    stream: true
-                })
-            });
+                headers: myHeaders,
+                body: JSON.stringify(requestBody),
+                redirect: "follow" as RequestRedirect
+            };
+
+            // 发送聊天完成请求
+            const response = await fetch(`${this.imageApiBase}/gpt4o-image/generate`, requestOptions);
             
             if (!response.ok) {
                 const errorData = await response.json();
@@ -199,56 +242,23 @@ export default class ChatGPT4O extends OpenaiBot {
                     error: new ChatError(ErrorCode.MODEL_INTERNAL_ERROR, JSON.stringify(errorData))
                 }));
             }
+
+            const result = await response.json();
             
-            // 处理流式响应
-            const reader = response.body!.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let messageId = createUuid();
-            let fullText = "";
-            
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n').filter(line => line.trim() !== '');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        
-                        if (data === '[DONE]') {
-                            // 完成
-                            cb(rid, new ConversationResponse({
-                                conversation_id: this.botSession.session.botConversationId,
-                                message_id: messageId,
-                                message_type: ResponseMessageType.DONE
-                            }));
-                            
-                            // 保存消息
-                            this.botSession.session.addMessage(new SimpleBotMessage(fullText, messageId));
-                            break;
-                        }
-                        
-                        try {
-                            const parsedData = JSON.parse(data);
-                            if (parsedData.choices && parsedData.choices[0].delta && parsedData.choices[0].delta.content) {
-                                const content = parsedData.choices[0].delta.content;
-                                fullText += content;
-                                
-                                cb(rid, new ConversationResponse({
-                                    message_type: ResponseMessageType.GENERATING,
-                                    conversation_id: this.botSession.session.botConversationId,
-                                    message_id: messageId,
-                                    message_text: fullText
-                                }));
-                            }
-                        } catch (e) {
-                            Logger.log('Error parsing stream data:', e);
-                        }
-                    }
-                }
+            if (result.code !== 200 || !result.data.taskId) {
+                return cb(rid, new ConversationResponse({
+                    conversation_id: this.botSession.session.botConversationId,
+                    parent_message_id: this.botSession.session.getParentMessageId(),
+                    message_type: ResponseMessageType.ERROR,
+                    error: new ChatError(ErrorCode.MODEL_INTERNAL_ERROR, result.msg || "创建聊天任务失败")
+                }));
             }
+
+            // 获取任务ID
+            const taskId = result.data.taskId;
+            
+            // 开始轮询任务状态
+            await this.pollChatCompletionStatus(taskId, rid, cb, messageId);
             
         } catch (error) {
             return cb(rid, new ConversationResponse({
@@ -258,6 +268,116 @@ export default class ChatGPT4O extends OpenaiBot {
                 error: new ChatError(ErrorCode.UNKNOWN_ERROR, error.toString())
             }));
         }
+    }
+
+    // 轮询聊天完成状态
+    private async pollChatCompletionStatus(taskId: string, rid: string, cb: Function, messageId: string): Promise<void> {
+        const apiKey = ChatGPT4OAuthSingleton.getInstance().getApiKey();
+        const MAX_RETRIES = 3000; // 最多轮询30次
+        const POLL_INTERVAL = 2000; // 每2秒轮询一次
+        
+        const myHeaders = new Headers();
+        myHeaders.append("Accept", "application/json");
+        myHeaders.append("Authorization", `Bearer ${apiKey}`);
+
+        const requestOptions = {
+            method: "GET",
+            headers: myHeaders,
+            redirect: "follow" as RequestRedirect
+        };
+
+        let fullText = "";
+
+        for (let i = 0; i < MAX_RETRIES; i++) {
+            try {
+                // 等待一段时间再查询
+                if (i > 0) {
+                    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+                }
+
+                const response = await fetch(`${this.imageApiBase}/gpt4o-image/record-info?taskId=${taskId}`, requestOptions);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    Logger.log('Error polling chat status:', errorData);
+                    continue; // 继续轮询
+                }
+
+                const result = await response.json();
+                
+                // 检查任务状态
+                if (result.code === 200 && result.data.status) {
+                    switch (result.data.status) {
+                        case "SUCCESS":
+                            // 生成成功，返回回复内容
+                            if (result.data.content) {
+                                fullText = result.data.content;
+                                
+                                // 发送生成完成的消息
+                                cb(rid, new ConversationResponse({
+                                    message_type: ResponseMessageType.GENERATING,
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_text: fullText
+                                }));
+                                
+                                // 发送完成信号
+                                cb(rid, new ConversationResponse({
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_type: ResponseMessageType.DONE
+                                }));
+                                
+                                // 保存消息
+                                this.botSession.session.addMessage(new SimpleBotMessage(fullText, messageId));
+                                return;
+                            }
+                            break;
+                            
+                        case "GENERATING":
+                            // 仍在生成中，如果有部分内容则更新
+                            if (result.data.partialContent && result.data.partialContent !== fullText) {
+                                fullText = result.data.partialContent;
+                                cb(rid, new ConversationResponse({
+                                    message_type: ResponseMessageType.GENERATING,
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_text: fullText
+                                }));
+                            } else {
+                                cb(rid, new ConversationResponse({
+                                    message_type: ResponseMessageType.GENERATING,
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_text: fullText || `正在生成回复，请稍候...(${i + 1}/${MAX_RETRIES})`
+                                }));
+                            }
+                            break;
+                            
+                        case "CREATE_TASK_FAILED":
+                        case "GENERATE_FAILED":
+                            // 生成失败
+                            return cb(rid, new ConversationResponse({
+                                conversation_id: this.botSession.session.botConversationId,
+                                parent_message_id: this.botSession.session.getParentMessageId(),
+                                message_type: ResponseMessageType.ERROR,
+                                error: new ChatError(ErrorCode.MODEL_INTERNAL_ERROR, `回复生成失败: ${result.msg || result.data.status}`)
+                            }));
+                    }
+                }
+            } catch (error) {
+                Logger.log('Error in polling:', error);
+                // 出错了但继续轮询
+            }
+        }
+        
+        // 超过最大重试次数，认为生成失败
+        return cb(rid, new ConversationResponse({
+            conversation_id: this.botSession.session.botConversationId,
+            parent_message_id: this.botSession.session.getParentMessageId(),
+            message_type: ResponseMessageType.ERROR,
+            error: new ChatError(ErrorCode.REQUEST_TIMEOUT_ABORT, "回复生成超时，请稍后再试")
+        }));
     }
 
     // 新增方法：生成图片

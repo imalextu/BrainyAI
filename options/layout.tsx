@@ -3,11 +3,13 @@ import Icon from "data-base64:~assets/icon.png";
 import {useState} from "react";
 import IconShortcut from "data-base64:~assets/icon_shortcut.svg";
 import IconShortcutSelected from "data-base64:~assets/icon_shortcut_selected.svg";
-import {PATH_SETTING_SHORTCUT} from "~options/router";
+import IconApiKey from "data-base64:~assets/icon_shortcut.svg";
+import IconApiKeySelected from "data-base64:~assets/icon_shortcut_selected.svg";
+import {PATH_SETTING_SHORTCUT, PATH_SETTING_APIKEY} from "~options/router";
 
 export default function Layout() {
     const n = useNavigate();
-    const [, setSelected] = useState('Sidebar');
+    const [selected, setSelected] = useState('Shortcut');
     const handleClick = ({id, path}: { id: string, path: string }) => {
         go(path);
         setSelected(id);
@@ -32,17 +34,14 @@ export default function Layout() {
                 </div>
             </div>
             <div className={'flex flex-col mt-[86px] ml-[24px]'}>
-                {/*<ImageTextComponent onClick={() => handleClick({id: 'Sidebar', path: PATH_SETTING_SIDEBAR})}
-                                        imageSrc={IconSidebar} imageSrcSelected={IconSidebarSelected} text={'Siderbar'}
-                                        className={''} isSelected={selected === 'Sidebar'}/>
-                    <ImageTextComponent onClick={() => handleClick({id: 'ContactUs', path: ""})}
-                                        imageSrc={IconContactUs} imageSrcSelected={IconContactUsSelected}
-                                        text={'Contact Us'} className={'mt-[24px]'}
-                                        isSelected={selected === 'ContactUs'}/>*/}
                 <ImageTextComponent onClick={() => handleClick({id: 'Shortcut', path: PATH_SETTING_SHORTCUT})}
                     imageSrc={IconShortcut} imageSrcSelected={IconShortcutSelected}
-                    text={'Shortcut Menu'} className={''}
-                    isSelected={true}/>
+                    text={'快捷菜单'} className={''}
+                    isSelected={selected === 'Shortcut'}/>
+                <ImageTextComponent onClick={() => handleClick({id: 'ApiKey', path: PATH_SETTING_APIKEY})}
+                    imageSrc={IconApiKey} imageSrcSelected={IconApiKeySelected}
+                    text={'API密钥设置'} className={'mt-[24px]'}
+                    isSelected={selected === 'ApiKey'}/>
             </div>
         </div>
         <div className={"flex-1"}>
