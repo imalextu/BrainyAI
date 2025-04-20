@@ -1,4 +1,4 @@
-import React, {Fragment, memo, useContext, useEffect, useRef, useState} from "react";
+import React, {Fragment, memo, useContext, useEffect, useRef, useState, useCallback} from "react";
 import {SidePanelContext} from "~provider/sidepanel/SidePanelProvider";
 import styleText, * as style from "~style/panel-main.module.scss";
 import {Input, List, message, Modal, Popover, Tooltip, type UploadProps} from "antd";
@@ -65,6 +65,10 @@ import {UploadUtils} from "~utils/UploadUtils";
 import QuoteCardIcon from "data-base64:~assets/icon_quote_card.svg";
 import DownloadCardIcon from "data-base64:~assets/icon_download_card.svg";
 import FileBgIcon from "data-base64:~assets/icon_file_bg.svg";
+import ScreenshotIcon from "data-base64:~assets/icon_screenshot.svg";
+import ReactCrop, { type Crop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
+
 let abortController:AbortController;
 
 let popIsShow = false;
@@ -925,6 +929,7 @@ const MessageList = memo(() => {
     </div>;
 });
 
+
 function ConversationContent() {
     const {currentBots,setCurrentBots} = useContext(ModelManagementContext);
     const {setMessages} = useContext(ConversationContext);
@@ -946,6 +951,34 @@ function ConversationContent() {
     const {conversationId} = useContext(ConversationContext);
     const [uploadBorderColor, setUploadBorderColo] = useState('#C2C2C2');
     const [uploadBackgroundColor, setUploadBackgroundColor] = useState('#FFFFFF');
+    const [canScreenshot, setCanScreenshot] = useState(false);
+    const [screenshotImage, setScreenshotImage] = useState<string | null>(null);
+    // 添加截图状态
+    // const [screenshotState, setScreenshotState] = useState({
+    //   isScreenshotMode: false,
+    //   screenshotImageUrl: ''
+    // })
+    
+    // // 处理截图完成
+    // const handleScreenshotComplete = useCallback((blob: Blob) => {
+    //   // 转换为文件并上传
+    //   const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' })
+    //   fileUpload(file)
+      
+    //   // 退出截图模式
+    //   setScreenshotState({
+    //     isScreenshotMode: false,
+    //     screenshotImageUrl: ''
+    //   })
+    // }, [])
+    
+    // // 处理取消截图
+    // const handleScreenshotCancel = useCallback(() => {
+    //   setScreenshotState({
+    //     isScreenshotMode: false,
+    //     screenshotImageUrl: ''
+    //   })
+    // }, [])
 
     useEffect(() => {
         eventBus.on('quota-click', ({title, content}) => showQuotingText(title, content));
@@ -953,7 +986,70 @@ function ConversationContent() {
             hideQuotingText();
             setIsUploading([true,false,uploadData[0],uploadData[1],uploadData[2],uploadData[3],uploadData[4]]);
         });
+        
+        // 检查当前页面是否可以截图
+        checkScreenshotAvailability();
+
+        // 监听页面变化，重新检查截图可用性
+        chrome.tabs.onUpdated.addListener(handleTabUpdate);
+        
+        return () => {
+            chrome.runtime.onMessage.removeListener(handleMessage);
+            document.body.removeEventListener('mousedown', handleMouseDown);
+            chrome.tabs.onUpdated.removeListener(handleTabUpdate);
+        };
     }, []);
+
+    // 检查当前页面是否可以截图
+    const checkScreenshotAvailability = () => {
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            const currentTab = tabs[0];
+            // 检查URL是否有效 - 排除chrome://、chrome-extension://等特殊页面
+            const isValidUrl = currentTab.url && !currentTab.url.startsWith("chrome:") && 
+                              !currentTab.url.startsWith("chrome-extension:") &&
+                              !currentTab.url.startsWith("about:");
+            setCanScreenshot(!!isValidUrl);
+        });
+    };
+
+    // 监听标签页更新
+    const handleTabUpdate = (tabId, changeInfo) => {
+        if (changeInfo.status === 'complete') {
+            checkScreenshotAvailability();
+        }
+    };
+
+  // 修改截图方法，通过消息通信将截图请求发送到主页面
+const captureScreenshot = async () => {
+    try {
+      // 发送消息到content script，触发主页面截图
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0].id) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            action: "START_SCREENSHOT"
+          });
+          
+          // 监听截图完成消息
+          chrome.runtime.onMessage.addListener(function handleScreenshot(message) {
+            if (message.action === "SCREENSHOT_COMPLETED" && message.imageData) {
+              // 将Base64转换为Blob
+              fetch(message.imageData)
+                .then(res => res.blob())
+                .then(blob => {
+                  const file = new File([blob], `screenshot-${Date.now()}.png`, { type: 'image/png' });
+                  fileUpload(file);
+                });
+              // 移除监听器
+              chrome.runtime.onMessage.removeListener(handleScreenshot);
+            }
+          });
+        }
+      });
+    } catch (error) {
+      console.error("截图过程中出错:", error);
+    }
+  };
+  
 
     const handleOpenChange = (newOpen: boolean) => {
         setModelSelectorOpen(newOpen);
@@ -1434,6 +1530,9 @@ function ConversationContent() {
                     {modelSelectorModal}
                     {currentModelView()}
                     <img src={InputAttachmentIcon} alt='' className={'w-[16px] h-[16px] ms-[12px] cursor-pointer'} onClick={() => showUploadFile()}/>
+                   
+                        <img src={ScreenshotIcon} alt='截图' className={'w-[16px] h-[16px] ms-[12px] cursor-pointer'} onClick={() => captureScreenshot()}/>
+                    
                 </div>
             </div>
             <div
@@ -1515,7 +1614,7 @@ function ConversationContent() {
                     className={'w-full px-[12px] py-[8px] text-black align-top bg overflow-auto whitespace-pre-wrap resize-none focus:bg-transparent focus:shadow-none focus:border-none focus:outline-none hover:bg-transparent hover:shadow-none hover:border-none hover:outline-none'}
                     autoFocus={true}
                     onFocus={() => textInputFocus()}
-                    placeholder="Enter message..."
+                    placeholder="Enter message...1"
                     onKeyDown={(e) => handleKeyDown(e)}
                     value={inputValue}
                     onChange={(e) => {
@@ -1572,6 +1671,7 @@ function ConversationContent() {
                 </div>
             </div>
         </Modal>
+
     </Fragment>;
 }
 
@@ -1586,3 +1686,4 @@ export default function Conversation() {
         </ConversationProvider>
     </ModelManagementProvider>;
 }
+

@@ -234,10 +234,15 @@ export class OpenaiBot extends BotBase implements IBot {
 
             return;
         }
+        Logger.log("openAiApi.requirementsData111", openAiApi.requirementsData);
 
-        if (openAiApi.requirementsData.arkose.required) {
+        if (openAiApi.requirementsData?.arkose?.required) {
             await this.arkoseInstance.loadArkoseScript(openAiApi.requirementsData);
             Logger.log('openAiApi.requirementsData', openAiApi.requirementsData);
+        } else if (openAiApi.requirementsData?.turnstile?.required) {
+            Logger.log('Turnstile verification required');
+        } else if (openAiApi.requirementsData?.proofofwork?.required) {
+            Logger.log('Proof of work verification required');
         }
 
         void openAiApi.conversation((message) => {
