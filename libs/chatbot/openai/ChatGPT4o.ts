@@ -304,13 +304,41 @@ export default class ChatGPT4O extends OpenaiBot {
                 }
 
                 const result = await response.json();
+                Logger.log('Poll result:', result);
                 
                 // 检查任务状态
                 if (result.code === 200 && result.data.status) {
                     switch (result.data.status) {
                         case "SUCCESS":
-                            // 生成成功，返回回复内容
-                            if (result.data.content) {
+                            // 生成成功，首先检查是否有图片结果
+                            if (result.data.response && result.data.response.resultUrls && result.data.response.resultUrls.length > 0) {
+                                // 如果有图片结果，构建Markdown消息展示图片
+                                let imageMarkdown = "### 图片生成结果\n\n";
+                                result.data.response.resultUrls.forEach((url, index) => {
+                                    imageMarkdown += `![图片${index + 1}](${url})\n\n`;
+                                });
+                                
+                                // 发送生成完成的消息
+                                cb(rid, new ConversationResponse({
+                                    message_type: ResponseMessageType.GENERATING,
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_text: imageMarkdown
+                                }));
+                                
+                                // 发送完成信号
+                                cb(rid, new ConversationResponse({
+                                    conversation_id: this.botSession.session.botConversationId,
+                                    message_id: messageId,
+                                    message_type: ResponseMessageType.DONE
+                                }));
+                                
+                                // 保存消息
+                                this.botSession.session.addMessage(new SimpleBotMessage(imageMarkdown, messageId));
+                                return;
+                            } 
+                            // 如果没有图片，检查是否有文本内容
+                            else if (result.data.content) {
                                 fullText = result.data.content;
                                 
                                 // 发送生成完成的消息
