@@ -13,8 +13,8 @@ import {SimpleBotMessage} from "~libs/chatbot/BotSessionBase";
 class ChatGPT4OAuthSingleton {
     private static instance: ChatGPT4OAuthSingleton;
     auth: OpenAIAuth;
-    private apiKey: string = ""; // 在这里写死API Key
-    private useApiKey: boolean = false; // 控制是否使用API Key
+    private apiKey: string = process.env.OPENAI_API_KEY || ""; // 从环境变量中读取API Key
+    private useApiKey: boolean = !!process.env.OPENAI_API_KEY; // 根据环境变量是否存在决定是否使用API Key
 
     protected constructor() {
         // ignore
