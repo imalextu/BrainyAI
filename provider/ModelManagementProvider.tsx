@@ -51,7 +51,7 @@ export const ModelManagementContext = createContext({} as IModelManagementProvid
 
 export default function ModelManagementProvider({children}) {
     // const defaultModels: Ms = [ChatGPT35Turbo, CopilotBot, KimiBot];
-    const defaultModels: Ms = [CopilotBot];
+    const defaultModels: Ms = [ChatGPT4O];
     const [currentBots, setCurrentBots] = useState<IModelManagementProvider['currentBots']>(defaultModels);
     const allModels = useRef<Ms>([Llama3SonarLarge32KChat, Llama3SonarLarge32kOnline, Claude3Haiku, ChatGPT35Turbo, ChatGPT4O, ChatGPT4Turbo, CopilotBot, KimiBot, Llama370bInstruct, Gemma7bIt, Llavav1634b, Mistral822b]);
     const storage = new Storage();

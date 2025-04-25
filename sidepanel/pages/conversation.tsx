@@ -556,6 +556,7 @@ export const AIMessage = memo(({message, i}: {
     const [errorModels, setErrorModels] = useState<errorModels[]>([]);
     const [botProviders, setBotProviders] = useState<Ms>(message.botProviders || []);
     const {messages} = useContext(ConversationContext);
+    const {messageApi} = useContext(SidePanelContext);
     const [popoverOpen, setPopoverOpen] = useState(false);
     const switchRef = useRef<HTMLImageElement>(null);
     const popoverRef = useRef<HTMLDivElement>(null);
@@ -574,7 +575,9 @@ export const AIMessage = memo(({message, i}: {
         });
 
         EventBus.on('model-switch', () => {
-            setPopoverOpen(true);
+            // setPopoverOpen(true); // 注释掉原代码
+            // 在这里可以显示一个消息，告知用户模型切换功能已禁用
+            void messageApi.info('模型切换功能已禁用，将使用默认模型');
         });
 
         window.addEventListener('mousedown', (e: MouseEvent) => {
@@ -933,6 +936,7 @@ const MessageList = memo(() => {
 function ConversationContent() {
     const {currentBots,setCurrentBots} = useContext(ModelManagementContext);
     const {setMessages} = useContext(ConversationContext);
+    const {messageApi} = useContext(SidePanelContext);
     const ref = React.useRef<TextAreaRef>(null);
     const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
     const [cards] = useStorage('promptData', PromptDatas);
@@ -994,6 +998,8 @@ function ConversationContent() {
 
         // 监听页面变化，重新检查截图可用性
         chrome.tabs.onUpdated.addListener(handleTabUpdate);
+        
+        // 移除eventBus.on('model-switch')事件监听器
         
         return () => {
             chrome.runtime.onMessage.removeListener(handleMessage);
@@ -1073,22 +1079,28 @@ const captureScreenshot = async () => {
     };
 
     const modelSelectorModal = (
+        // 永不显示模态框
         <Modal destroyOnClose className='modelModal' title={null} closeIcon={false} width={600}
             style={{top: 60, bottom: 0, }} footer={null}
-            open={modelSelectorOpen} onCancel={() => handleOpenChange(false)}>
+            open={false} // 强制设置为false，永不显示
+            onCancel={() => handleOpenChange(false)}>
             <ModelCheckList onClose={() => handleOpenChange(false)} />
         </Modal>
     );
 
     const currentModelView = () => {
-        return <div onClick={() => showModelSelector(true)}
-            className={'cursor-pointer rounded-[40px] bg-[#F3F4F9] px-3 text-[12px] h-[25px] flex justify-center items-center'}>
+        // 保留原始代码但禁用点击功能，并添加一个disabled样式
+        return <div 
+            // onClick={() => showModelSelector(true)} // 注释掉原点击事件
+            className={'cursor-not-allowed rounded-[40px] bg-[#F3F4F9] px-3 text-[12px] h-[25px] flex justify-center items-center opacity-80'} // 添加not-allowed指针和不透明度
+            title="模型选择功能已禁用，将使用默认模型" // 添加提示
+            >
             {
                 currentBots.length &&
                 currentBots.map(item => {
                     return (
                         <div key={item.botName} className={'flex justify-center items-center'}>
-                            <Tooltip title={item.botName} placement={"top"}>
+                            <Tooltip title={"当前使用默认模型 - " + item.botName} placement={"top"}>
                                 <img className={'mr-2 w-[16px] h-[16px]'}
                                     src={item.logoSrc} alt=''/>
                             </Tooltip>
@@ -1098,17 +1110,22 @@ const captureScreenshot = async () => {
                     );
                 })
             }
-            <CaretDownOutlined className={'ml-[4px]'}/>
+            <CaretDownOutlined className={'ml-[4px] text-gray-400'}/>
         </div>;
     };
 
     async function showModelSelector(isShow: boolean) {
+        // 保留原代码但添加提前返回，永不显示选择器
+        return; // 直接返回，不执行任何操作
+        
+        /* 原始代码保留但不会执行
         const isUploadingInfo = await getLatestState(setIsUploading);
         if(isUploadingInfo[0] && isUploadingInfo[1]){
             void message.warning('File is uploading, please wait a moment.');
             return;
         }
         handleOpenChange(isShow);
+        */
     }
 
     async function showQuotingText(title: QuotingType, content: string) {
