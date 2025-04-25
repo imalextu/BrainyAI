@@ -938,6 +938,8 @@ function ConversationContent() {
     const [cards] = useStorage('promptData', PromptDatas);
     const [pdfCards] = useStorage('pdfPromptData', PdfPromptDatas);
     const [imageCards] = useStorage('imagePromptData', ImagePromptDatas);
+    const [apiKey] = useStorage('apiKey', '');
+    const [useApiKey] = useStorage('useApiKey', false);
     const [quotingText, setQuotingText] = useState(['', '']);
     const [isHaveQuotingText, setIsHaveQuotingText] = useState(false);
     const [inputValue, setInputValue] = useState('');
@@ -1531,8 +1533,12 @@ const captureScreenshot = async () => {
                     {currentModelView()}
                     <img src={InputAttachmentIcon} alt='' className={'w-[16px] h-[16px] ms-[12px] cursor-pointer'} onClick={() => showUploadFile()}/>
                    
-                        <img src={ScreenshotIcon} alt='截图' className={'w-[16px] h-[16px] ms-[12px] cursor-pointer'} onClick={() => captureScreenshot()}/>
+                    <img src={ScreenshotIcon} alt='截图' className={'w-[16px] h-[16px] ms-[12px] cursor-pointer'} onClick={() => captureScreenshot()}/>
                     
+                </div>
+                <div className={'flex flex-col items-start mt-2 text-xs text-[#5E5E5E]'}>
+                    <div>API密钥: {apiKey ? apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4) : '未设置'}</div>
+                    <div>API1状态: {useApiKey ? '已启用' : '未启用'}</div>
                 </div>
             </div>
             <div

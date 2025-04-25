@@ -35,6 +35,11 @@ class ChatGPT4OAuthSingleton {
         }
     }
 
+    // 添加方法，重新加载设置
+    public async reloadSettings() {
+        await this.initializeSettings();
+    }
+
     static getInstance(): ChatGPT4OAuthSingleton {
         if (!ChatGPT4OAuthSingleton.instance) {
             ChatGPT4OAuthSingleton.instance = new ChatGPT4OAuthSingleton();
@@ -44,11 +49,13 @@ class ChatGPT4OAuthSingleton {
         return ChatGPT4OAuthSingleton.instance;
     }
     
-    getApiKey(): string {
+    async getApiKey(): Promise<string> {
+        await this.reloadSettings();
         return this.apiKey;
     }
     
-    isUsingApiKey(): boolean {
+    async isUsingApiKey(): Promise<boolean> {
+        await this.reloadSettings();
         return this.useApiKey;
     }
 }
@@ -117,8 +124,8 @@ export default class ChatGPT4O extends OpenaiBot {
 
 
         Logger.log("process.env.OPENAI_API_KEY111", process.env.OPENAI_API_KEY);
-        Logger.log("ChatGPT4OAuthSingleton.getInstance().isUsingApiKey111()", ChatGPT4OAuthSingleton.getInstance().isUsingApiKey());
-        if (ChatGPT4OAuthSingleton.getInstance().isUsingApiKey()) {
+        Logger.log("ChatGPT4OAuthSingleton.getInstance().isUsingApiKey111()", await ChatGPT4OAuthSingleton.getInstance().isUsingApiKey());
+        if (await ChatGPT4OAuthSingleton.getInstance().isUsingApiKey()) {
             return true;
         }
         
@@ -137,9 +144,10 @@ export default class ChatGPT4O extends OpenaiBot {
 
     async completion({prompt, rid, cb, fileRef}: BotCompletionParams): Promise<void> {
         // 如果使用API Key，直接调用super.completion方法
-        if (ChatGPT4OAuthSingleton.getInstance().isUsingApiKey()) {
+        if (await ChatGPT4OAuthSingleton.getInstance().isUsingApiKey()) {
             // 直接调用父类方法，由其内部处理API Key逻辑
             // return super.completion({prompt, rid, cb, fileRef});
+            // console.log("使用API Key");
             return this.apiKeyCompletion({prompt, rid, cb, fileRef});
         }
         
@@ -169,7 +177,7 @@ export default class ChatGPT4O extends OpenaiBot {
 
     // 添加使用API Key调用OpenAI接口的方法
     private async apiKeyCompletion({prompt, rid, cb, fileRef}: BotCompletionParams): Promise<void> {
-        const apiKey = ChatGPT4OAuthSingleton.getInstance().getApiKey();
+        const apiKey = await ChatGPT4OAuthSingleton.getInstance().getApiKey();
         let ref: OpenAiFileRef | null = null;
         
         if (fileRef) {
@@ -272,7 +280,7 @@ export default class ChatGPT4O extends OpenaiBot {
 
     // 轮询聊天完成状态
     private async pollChatCompletionStatus(taskId: string, rid: string, cb: Function, messageId: string): Promise<void> {
-        const apiKey = ChatGPT4OAuthSingleton.getInstance().getApiKey();
+        const apiKey = await ChatGPT4OAuthSingleton.getInstance().getApiKey();
         const MAX_RETRIES = 3000; // 最多轮询30次
         const POLL_INTERVAL = 2000; // 每2秒轮询一次
         
@@ -416,7 +424,7 @@ export default class ChatGPT4O extends OpenaiBot {
         rid: string, 
         cb: Function 
     }): Promise<void> {
-        const apiKey = ChatGPT4OAuthSingleton.getInstance().getApiKey();
+        const apiKey = await ChatGPT4OAuthSingleton.getInstance().getApiKey();
         console.log("apiKey1112", apiKey);
         
         if (!apiKey) {
@@ -514,7 +522,7 @@ export default class ChatGPT4O extends OpenaiBot {
 
     // 轮询图片生成状态
     private async pollImageGenerationStatus(taskId: string, rid: string, cb: Function, messageId: string): Promise<void> {
-        const apiKey = ChatGPT4OAuthSingleton.getInstance().getApiKey();
+        const apiKey = await ChatGPT4OAuthSingleton.getInstance().getApiKey();
         const MAX_RETRIES = 30; // 最多轮询30次
         const POLL_INTERVAL = 3000; // 每3秒轮询一次
         
