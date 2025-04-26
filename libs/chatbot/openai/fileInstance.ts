@@ -21,14 +21,14 @@ async function testupload(file: File) {
         // }
         
         const formData = new FormData();
-        formData.append("model", "gpt-image-1-vip");
+        formData.append("model", "gpt-image-1");
         formData.append("image[]", file);
         formData.append("prompt", "图片改成黄色主题色，且为卡通风格");
         
         const response = await fetch("https://api.tu-zi.com/v1/images/edits", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer sk-30JDOcDZO04XLKF14S5mwgWIGW6JOj5nBETlcXSIBstsQ3yX`
+                "Authorization": `Bearer sk-0bztWUtxsYni28fxkd3AdZjoq2w8bs1VUlqrZeQmvXOvVJhq`
             },
             body: formData
         });
