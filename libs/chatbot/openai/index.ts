@@ -6,7 +6,7 @@ import {ConversationResponse,  ResponseMessageType} from "~libs/open-ai/open-ai-
 import {OpenAIAuth} from "~libs/open-ai/open-ai-auth";
 import {OpenAiApi} from "~libs/open-ai/open-ai-api";
 import {ChatError, ErrorCode} from "~utils/errors";
-import {BotBase, BotSupportedMimeType} from "~libs/chatbot/BotBase";
+import {BotBase, BotSupportedMimeType, FileRef} from "~libs/chatbot/BotBase";
 import {BotSession, SimpleBotMessage} from "~libs/chatbot/BotSessionBase";
 import IconOpenAI from "data-base64:~assets/simple-icons_openai.svg";
 import {sendToBackground} from "@plasmohq/messaging";
@@ -20,9 +20,10 @@ import {
     WINDOW_FOR_REMOVE_STORAGE_KEY
 } from "~utils";
 import XFramePerplexityChat from "~component/xframe/perplexity-chat";
-import {OpenAiFileRef, OpenAiFileSingleton} from "~libs/chatbot/openai/fileInstance";
+import {OpenAiFileRef, OpenAiFileSingleton, OpenAiSupportedMimeTypes} from "~libs/chatbot/openai/fileInstance";
 import {OpenAiUserModelInfoSingleton} from "~libs/chatbot/openai/ModelInstance";
 import {Storage} from "@plasmohq/storage";
+
 
 export class OpenaiAuthSingleton {
     private static instance: OpenaiAuthSingleton;
@@ -71,6 +72,11 @@ class OpenAiSessionSingleton {
     }
 }
 
+const LOCAL_IMAGE_PREFIX = "local_image_";
+
+interface IMessage {
+    text: string;
+}
 
 export class OpenaiBot extends BotBase implements IBot {
     model = "text-davinci-002-render-sha";
@@ -335,8 +341,49 @@ export class OpenaiBot extends BotBase implements IBot {
 
     supportedUploadTypes: BotSupportedMimeType[] = [];
 
-    uploadFile(file: File): Promise<string> {
-        return this.fileInstance.uploadFile(file, this.supportedUploadTypes);
+    async uploadFile(file: File): Promise<string> {
+        return await OpenAiFileSingleton.getInstance().uploadFile(file, OpenAiSupportedMimeTypes);
+    }
+
+    async genPrompt(message: IMessage, fileRef?: FileRef<OpenAiFileRef> | null): Promise<[ChatError | null, any]> {
+        try {
+            let fileAttachment: any = null;
+
+            if (fileRef && fileRef.ref) {
+                const fileData = fileRef.ref;
+                // 检查是否为本地存储的图片
+                if (fileData.id.startsWith(LOCAL_IMAGE_PREFIX)) {
+                    const file = OpenAiFileSingleton.getInstance().getLocalImage(fileData.id);
+                    if (file) {
+                        // 处理本地图片
+                        fileAttachment = {
+                            file_id: fileData.id,
+                            type: 'image',
+                            mimeType: fileData.mimeType,
+                            width: fileData.width,
+                            height: fileData.height
+                        };
+                    }
+                } else {
+                    // 远程文件处理逻辑
+                    fileAttachment = {
+                        file_id: fileData.id,
+                        type: fileData.mimeType === BotSupportedMimeType.PDF ? 'file' : 'image',
+                        mimeType: fileData.mimeType,
+                        width: fileData.width,
+                        height: fileData.height
+                    };
+                }
+            }
+            
+            // 返回生成的提示内容
+            return [null, {
+                content: message.text || "",
+                file: fileAttachment
+            }];
+        } catch (e) {
+            return [new ChatError(ErrorCode.UNKNOWN_ERROR), null];
+        }
     }
 
     getBotName(): string {

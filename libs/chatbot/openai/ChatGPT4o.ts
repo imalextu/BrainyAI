@@ -179,6 +179,7 @@ export default class ChatGPT4O extends OpenaiBot {
     private async apiKeyCompletion({prompt, rid, cb, fileRef}: BotCompletionParams): Promise<void> {
         const apiKey = await ChatGPT4OAuthSingleton.getInstance().getApiKey();
         let ref: OpenAiFileRef | null = null;
+        let filesUrl: string[] = [];
         
         if (fileRef) {
             const refObj = this.fileInstance.getRefs(fileRef);
@@ -189,8 +190,19 @@ export default class ChatGPT4O extends OpenaiBot {
                 }));
             }
             ref = refObj!.ref;
+
+            
+            Logger.log("fileRef111", fileRef);
+            Logger.log("ref111", ref);
+            
+            // 如果有关联的文件，创建临时URL
+            if (refObj.file && refObj.file.type.startsWith('image/')) {
+                const tempUrl = URL.createObjectURL(refObj.file);
+                filesUrl.push(tempUrl);
+            }
         }
-        
+
+        Logger.log("filesUrl111", filesUrl);
         Logger.log("apiKey111", apiKey);
 
         if (!apiKey) {
@@ -222,13 +234,18 @@ export default class ChatGPT4O extends OpenaiBot {
             myHeaders.append("Accept", "application/json");
             myHeaders.append("Authorization", `Bearer ${apiKey}`);
 
-            const requestBody = {
+            const requestBody: any = {
                 prompt: prompt,
                 size: "1:1"
             };
 
+            // 如果有图片URL，添加到请求体
+            if (filesUrl.length > 0) {
+                requestBody.filesUrl = filesUrl;
+            }
+
             if (messages && messages.length > 0) {
-                requestBody["messageHistory"] = messages;
+                requestBody.messageHistory = messages;
             }
 
             const requestOptions = {
@@ -268,7 +285,21 @@ export default class ChatGPT4O extends OpenaiBot {
             // 开始轮询任务状态
             await this.pollChatCompletionStatus(taskId, rid, cb, messageId);
             
+            // 释放创建的临时URL
+            filesUrl.forEach(url => {
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
+            });
+            
         } catch (error) {
+            // 释放创建的临时URL
+            filesUrl.forEach(url => {
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
+            });
+            
             return cb(rid, new ConversationResponse({
                 conversation_id: this.botSession.session.botConversationId,
                 parent_message_id: this.botSession.session.getParentMessageId(),

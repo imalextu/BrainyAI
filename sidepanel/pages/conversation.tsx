@@ -1410,15 +1410,45 @@ const captureScreenshot = async () => {
             if (isQuotShow) {
                 hideQuotingText();
             }
-            const uploadResult: unknown = await Promise.race([
-                UploadUtils.uploadFiles(Bots, file, conversationId),
-                abort
-            ]);
-            if (uploadResult instanceof Map) {
-                setIsUploading([true, false, fileType == FileTypes.OTHERS ? PdfIcon : URL.createObjectURL(file), file.name, uploadResult, fileType, file]);
+            
+            // 检查是否为图片文件，如果是则使用本地处理方式
+            if (fileType === FileTypes.Image) {
+                Logger.log('使用本地存储图片，不上传到远端=================');
+                // 创建本地引用Map
+                const localRefs = new Map<string, string>();
+                
+                // 使用Promise.all并行处理所有Bot的上传
+                const promises = await Promise.all(Bots.map(async (Bot) => {
+                    try {
+                        // 使用UploadUtils.uploadOne来正确初始化Bot实例并调用uploadFile
+                        return await UploadUtils.uploadOne(Bot, conversationId, file);
+                    } catch (error) {
+                        Logger.log('本地图片处理出错=================', error);
+                        return [Bot.botName, ''];
+                    }
+                }));
+                
+                // 构建上传引用Map
+                promises.forEach(([name, value]) => {
+                    if (value) {
+                        localRefs.set(name, value);
+                    }
+                });
+                
+                setIsUploading([true, false, URL.createObjectURL(file), file.name, localRefs, fileType, file]);
+                return localRefs;
+            } else {
+                // 对于非图片文件，仍使用原来的上传逻辑
+                const uploadResult: unknown = await Promise.race([
+                    UploadUtils.uploadFiles(Bots, file, conversationId),
+                    abort
+                ]);
+                if (uploadResult instanceof Map) {
+                    setIsUploading([true, false, fileType == FileTypes.OTHERS ? PdfIcon : URL.createObjectURL(file), file.name, uploadResult, fileType, file]);
+                }
+                Logger.log('uploadResult finish=================', uploadResult);
+                return uploadResult;
             }
-            Logger.log('uploadResult finish=================', uploadResult);
-            return uploadResult;
         } catch (err) {
             Logger.log('fileUpload Cancel=================', err.name);
         } finally {
@@ -1555,7 +1585,7 @@ const captureScreenshot = async () => {
                 </div>
                 <div className={'flex flex-col items-start mt-2 text-xs text-[#5E5E5E]'}>
                     <div>API密钥: {apiKey ? apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4) : '未设置'}</div>
-                    <div>API1状态: {useApiKey ? '已启用' : '未启用'}</div>
+                    <div>API12345状态: {useApiKey ? '已启用' : '未启用'}</div>
                 </div>
             </div>
             <div
